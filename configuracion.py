@@ -1,0 +1,3 @@
+ANCHO = 1366
+ALTO = 768
+ESCALA = 3
