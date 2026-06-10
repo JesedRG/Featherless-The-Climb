@@ -1,127 +1,131 @@
-import pygame, sys
+import pygame, sys, os
 from configuracion import ANCHO, ALTO
 from mecanicas import Buho
-from nivel import obtener_muros, dibujar_nivel
+from nivel import Plataformas
 
 pygame.init()
 pantalla = pygame.display.set_mode((ANCHO, ALTO))
 reloj = pygame.time.Clock()
 
-
 BLANCO = (255, 255, 255)
 VERDE_BOTON = (34, 177, 76)
-SOMBRA = (20, 80, 40)
-
+COLOR_TEXTO = (50, 50, 50)
 
 MENU = 0
 JUGANDO = 1
+GAMEOVER = 2
+
+# --- SISTEMA DE PUNTUACION ---
+ARCHIVO_PUNTUACION = "puntuacion.txt"
+
+def obtener_mejor_puntuacion():
+    if os.path.exists(ARCHIVO_PUNTUACION):
+        with open(ARCHIVO_PUNTUACION, "r") as f:
+            try: return int(f.read())
+            except: return 0
+    return 0
+
+def guardar_puntuacion(puntos):
+    mejor = obtener_mejor_puntuacion()
+    if puntos > mejor:
+        with open(ARCHIVO_PUNTUACION, "w") as f:
+            f.write(str(puntos))
 
 def fase1():
     estado_actual = MENU
     jugador = Buho()
-
+    gestor_plataformas = Plataformas(ANCHO, ALTO)
     
-    fondo_original = pygame.image.load("FOND-VERD.jpg").convert()
-    fondo = pygame.transform.scale(fondo_original, (ANCHO, ALTO))
+    # Cargar y escalar la imagen del cielo para el fondo
+    try:
+        fondo_cielo = pygame.image.load("FOND-VERD.jpeg").convert()
+        fondo_cielo = pygame.transform.scale(fondo_cielo, (ANCHO, ALTO))
+    except:
+        fondo_cielo = pygame.Surface((ANCHO, ALTO))
+        fondo_cielo.fill((135, 206, 235))
 
+    boton_jugar = pygame.Rect(ANCHO // 2 - 125, ALTO // 2 - 40, 250, 80)
+    fuente_titulo = pygame.font.SysFont("Arial", 64, bold=True)
+    fuente_botones = pygame.font.SysFont("Arial", 36, bold=True)
+    fuente_ui = pygame.font.SysFont("Arial", 28)
     
-    boton_play = pygame.Rect(ANCHO // 2 - 100, ALTO // 2 - 50, 200, 100)
-    fuente = pygame.font.SysFont("Arial", 40)
-    texto_play = fuente.render("PLAY", True, BLANCO)
+    cam_y = 0
+    puntuacion = 0
+    mejor_puntuacion = obtener_mejor_puntuacion()
 
-    
-    transicion = False
-    direccion = 0
-    offset_x = 0
-    vel_transicion = 20
-    pantalla_actual = 1
-    pantalla_destino = 0
-
-    
     while True:
-        
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             
             if evento.type == pygame.MOUSEBUTTONDOWN:
-                if estado_actual == MENU:
-                    if boton_play.collidepoint(evento.pos):
+                if estado_actual in [MENU, GAMEOVER]:
+                    if boton_jugar.collidepoint(evento.pos):
                         estado_actual = JUGANDO
+                        # Reinicia variables para una nueva partida
+                        jugador = Buho()
+                        gestor_plataformas = Plataformas(ANCHO, ALTO)
+                        cam_y = 0
+                        puntuacion = 0
             
             if evento.type == pygame.KEYDOWN:
                 if estado_actual == JUGANDO and evento.key == pygame.K_SPACE:
                     jugador.saltar()
 
-        
-        cam_x = 0 
-        
         if estado_actual == JUGANDO:
             teclas = pygame.key.get_pressed()
-            muros = obtener_muros(pantalla_actual, ANCHO, ALTO)
+            jugador.actualizar(teclas)
+            
+            jugador.rect.x += jugador.vel_x
+            if jugador.rect.left < 0: jugador.rect.left = 0
+            if jugador.rect.right > ANCHO: jugador.rect.right = ANCHO
 
-            if not transicion:
-                jugador.actualizar(teclas)
-                jugador.rect.x += jugador.vel_x
+            jugador.rect.y += jugador.vel_y
+            jugador.en_suelo = False
+            
+            for m in gestor_plataformas.muros:
+                if jugador.rect.colliderect(m):
+                    # Solo chocar si el búho está cayendo (permite atravesar plataformas desde abajo)
+                    if jugador.vel_y > 0 and jugador.rect.bottom <= m.bottom + 20:
+                        jugador.rect.bottom = m.top
+                        jugador.vel_y = 0
+                        jugador.en_suelo = True
 
-                for m in muros:
-                    if jugador.rect.colliderect(m):
-                        if jugador.vel_x > 0: jugador.rect.right = m.left
-                        elif jugador.vel_x < 0: jugador.rect.left = m.right
-
-                jugador.rect.y += jugador.vel_y
-                jugador.en_suelo = False
-                suelo_y = ALTO - 118
-
-                if jugador.rect.bottom >= suelo_y:
-                    jugador.rect.bottom = suelo_y
-                    jugador.vel_y = 0
-                    jugador.en_suelo = True
-
-                for m in muros:
-                    if jugador.rect.colliderect(m):
-                        if jugador.vel_y > 0:
-                            jugador.rect.bottom = m.top
-                            jugador.vel_y = 0
-                            jugador.en_suelo = True
-                        elif jugador.vel_y < 0:
-                            jugador.rect.top = m.bottom
-                            jugador.vel_y = 0
-
+            #seguir al jugador hacia arriba
+            umbral_camara = ALTO // 2
+            if jugador.rect.y - cam_y < umbral_camara:
+                cam_y = jugador.rect.y - umbral_camara
                 
-                if jugador.rect.right >= ANCHO:
-                    transicion = True
-                    direccion = 1
-                    pantalla_destino = pantalla_actual + 1
-                elif jugador.rect.left <= 0:
-                    transicion = True
-                    direccion = -1
-                    pantalla_destino = pantalla_actual - 1
+            # Actualizar Puntuacion
+            altura_actual = int((500 - jugador.rect.y) / 10)
+            if altura_actual > puntuacion:
+                puntuacion = altura_actual
 
-            if transicion:
-                offset_x += vel_transicion
-                cam_x = offset_x * direccion
-                if offset_x >= ANCHO:
-                    transicion = False
-                    offset_x = 0
-                    pantalla_actual = pantalla_destino
-                    if direccion == 1: jugador.rect.left = 10
-                    else: jugador.rect.right = ANCHO - 10
+            # Administrar ciclo de plataformas
+            gestor_plataformas.actualizar(cam_y)
+            
+            # Condicion de Derrota (cuando cae)
+            if jugador.rect.y - cam_y > ALTO:
+                estado_actual = GAMEOVER
+                guardar_puntuacion(puntuacion)
+                mejor_puntuacion = obtener_mejor_puntuacion()
 
-       
-        pantalla.blit(fondo, (0, 0)) 
+        pantalla.blit(fondo_cielo, (0, 0)) 
 
         if estado_actual == MENU:
-            pygame.draw.rect(pantalla, VERDE_BOTON, boton_play, border_radius=12)
-            pantalla.blit(texto_play, (boton_play.x + 55, boton_play.y + 25))
-        
-        elif estado_actual == JUGANDO:
-            niveles = [pantalla_actual, pantalla_destino] if transicion else [pantalla_actual, pantalla_actual]
-            for i, n in enumerate(niveles):
-                base_x = i * ANCHO - cam_x if transicion else 0
-                dibujar_nivel(pantalla, n, base_x, ANCHO, ALTO)
+            titulo = fuente_titulo.render("FEATHERLESS: THE CLIMB", True, (20, 20, 80))
+            pantalla.blit(titulo, (ANCHO//2 - titulo.get_width()//2, ALTO//4 - 50))
+            
+            pygame.draw.rect(pantalla, VERDE_BOTON, boton_jugar, border_radius=15)
+            texto_play = fuente_botones.render("JUGAR", True, BLANCO)
+            pantalla.blit(texto_play, (boton_jugar.centerx - texto_play.get_width()//2, boton_jugar.centery - texto_play.get_height()//2))
+            
+            record_texto = fuente_ui.render(f"Récord Actual: {mejor_puntuacion}", True, COLOR_TEXTO)
+            pantalla.blit(record_texto, (ANCHO//2 - record_texto.get_width()//2, ALTO - 100))
 
+        elif estado_actual == JUGANDO:
+            gestor_plataformas.dibujar(pantalla, cam_y)
             
             img = jugador.frames[jugador.estado]
             if isinstance(img, list):
@@ -129,10 +133,26 @@ def fase1():
             if not jugador.mirando_derecha:
                 img = pygame.transform.flip(img, True, False)
             
-            pantalla.blit(img, (jugador.rect.x - cam_x, jugador.rect.y))
+
+            pantalla.blit(img, (jugador.rect.x, jugador.rect.y - cam_y))
+            
+            # grafica de puntuacion
+            texto_puntos = fuente_ui.render(f"Altura: {puntuacion}m", True, (0, 0, 0))
+            pantalla.blit(texto_puntos, (20, 20))
+
+        elif estado_actual == GAMEOVER:
+            texto_go = fuente_titulo.render("¡TE CAISTE!!!!", True, (200, 40, 40))
+            pantalla.blit(texto_go, (ANCHO//2 - texto_go.get_width()//2, ALTO//4))
+            
+            texto_puntos = fuente_botones.render(f"Llegaste a: {puntuacion}m", True, COLOR_TEXTO)
+            pantalla.blit(texto_puntos, (ANCHO//2 - texto_puntos.get_width()//2, ALTO//2 - 60))
+
+            pygame.draw.rect(pantalla, VERDE_BOTON, boton_jugar, border_radius=15)
+            texto_play = fuente_botones.render("INTENTAR DE NUEVO", True, BLANCO)
+            pantalla.blit(texto_play, (boton_jugar.centerx - texto_play.get_width()//2, boton_jugar.centery - texto_play.get_height()//2))
 
         pygame.display.flip()
         reloj.tick(60)
-        pass
+
 if __name__ == "__main__":
     fase1()
