@@ -15,7 +15,6 @@ MENU = 0
 JUGANDO = 1
 GAMEOVER = 2
 
-# --- SISTEMA DE PUNTUACION ---
 ARCHIVO_PUNTUACION = "puntuacion.txt"
 
 def obtener_mejor_puntuacion():
@@ -36,9 +35,8 @@ def fase1():
     jugador = Buho()
     gestor_plataformas = Plataformas(ANCHO, ALTO)
     
-    # Cargar y escalar la imagen del cielo para el fondo
     try:
-        fondo_cielo = pygame.image.load("FOND-VERD.jpeg").convert()
+        fondo_cielo = pygame.image.load("FOND-VERD.png").convert()
         fondo_cielo = pygame.transform.scale(fondo_cielo, (ANCHO, ALTO))
     except:
         fondo_cielo = pygame.Surface((ANCHO, ALTO))
@@ -63,7 +61,6 @@ def fase1():
                 if estado_actual in [MENU, GAMEOVER]:
                     if boton_jugar.collidepoint(evento.pos):
                         estado_actual = JUGANDO
-                        # Reinicia variables para una nueva partida
                         jugador = Buho()
                         gestor_plataformas = Plataformas(ANCHO, ALTO)
                         cam_y = 0
@@ -86,26 +83,21 @@ def fase1():
             
             for m in gestor_plataformas.muros:
                 if jugador.rect.colliderect(m):
-                    # Solo chocar si el búho está cayendo (permite atravesar plataformas desde abajo)
                     if jugador.vel_y > 0 and jugador.rect.bottom <= m.bottom + 20:
                         jugador.rect.bottom = m.top
                         jugador.vel_y = 0
                         jugador.en_suelo = True
 
-            #seguir al jugador hacia arriba
             umbral_camara = ALTO // 2
             if jugador.rect.y - cam_y < umbral_camara:
                 cam_y = jugador.rect.y - umbral_camara
                 
-            # Actualizar Puntuacion
             altura_actual = int((500 - jugador.rect.y) / 10)
             if altura_actual > puntuacion:
                 puntuacion = altura_actual
 
-            # Administrar ciclo de plataformas
             gestor_plataformas.actualizar(cam_y)
             
-            # Condicion de Derrota (cuando cae)
             if jugador.rect.y - cam_y > ALTO:
                 estado_actual = GAMEOVER
                 guardar_puntuacion(puntuacion)
@@ -116,11 +108,9 @@ def fase1():
         if estado_actual == MENU:
             titulo = fuente_titulo.render("FEATHERLESS: THE CLIMB", True, (20, 20, 80))
             pantalla.blit(titulo, (ANCHO//2 - titulo.get_width()//2, ALTO//4 - 50))
-            
             pygame.draw.rect(pantalla, VERDE_BOTON, boton_jugar, border_radius=15)
             texto_play = fuente_botones.render("JUGAR", True, BLANCO)
             pantalla.blit(texto_play, (boton_jugar.centerx - texto_play.get_width()//2, boton_jugar.centery - texto_play.get_height()//2))
-            
             record_texto = fuente_ui.render(f"Récord Actual: {mejor_puntuacion}", True, COLOR_TEXTO)
             pantalla.blit(record_texto, (ANCHO//2 - record_texto.get_width()//2, ALTO - 100))
 
@@ -133,20 +123,18 @@ def fase1():
             if not jugador.mirando_derecha:
                 img = pygame.transform.flip(img, True, False)
             
-
-            pantalla.blit(img, (jugador.rect.x, jugador.rect.y - cam_y))
+            # Ajuste visual de carga de salto
+            offset_visual = 10 if jugador.agachado else 0
+            pantalla.blit(img, (jugador.rect.x, jugador.rect.y - cam_y + 30)) #el último cambia la posición en vertical del personaje para acomodarlo con
             
-            # grafica de puntuacion
             texto_puntos = fuente_ui.render(f"Altura: {puntuacion}m", True, (0, 0, 0))
             pantalla.blit(texto_puntos, (20, 20))
 
         elif estado_actual == GAMEOVER:
-            texto_go = fuente_titulo.render("¡TE CAISTE!!!!", True, (200, 40, 40))
+            texto_go = fuente_titulo.render("¡TE CAISTE!", True, (200, 40, 40))
             pantalla.blit(texto_go, (ANCHO//2 - texto_go.get_width()//2, ALTO//4))
-            
             texto_puntos = fuente_botones.render(f"Llegaste a: {puntuacion}m", True, COLOR_TEXTO)
             pantalla.blit(texto_puntos, (ANCHO//2 - texto_puntos.get_width()//2, ALTO//2 - 60))
-
             pygame.draw.rect(pantalla, VERDE_BOTON, boton_jugar, border_radius=15)
             texto_play = fuente_botones.render("INTENTAR DE NUEVO", True, BLANCO)
             pantalla.blit(texto_play, (boton_jugar.centerx - texto_play.get_width()//2, boton_jugar.centery - texto_play.get_height()//2))
